@@ -408,71 +408,61 @@ function updateSavedCount(){
 }
 updateSavedCount();
 
-function getGPS(type){
-  const valEl=document.getElementById(type==='samp'?'samp-gps-val':'src-gps-val');
-  const chipEl=document.getElementById(type==='samp'?'samp-gps-chip':'src-gps-chip');
+// ---- FIXED GPS FUNCTION FOR MEDIAN.CO ----
+function getGPS(type) {
+  var valEl = document.getElementById(type === 'samp' ? 'samp-gps-val' : 'src-gps-val');
+  var chipEl = document.getElementById(type === 'samp' ? 'samp-gps-chip' : 'src-gps-chip');
 
-  if(!navigator.geolocation){
+  if (!navigator.geolocation) {
     toast('GPS not available on this device');
-    valEl.textContent='GPS not supported';
+    valEl.textContent = 'GPS not supported';
+    chipEl.textContent = 'ERR';
     return;
   }
 
-  valEl.textContent='Fetching…';
-  chipEl.textContent='…';
+  valEl.textContent = 'Fetching…';
+  chipEl.textContent = '…';
 
-  // Request permission explicitly first (works better in Android WebView)
-  if(navigator.permissions && navigator.permissions.query){
-    navigator.permissions.query({name:'geolocation'}).then(function(result){
-      if(result.state==='denied'){
-        valEl.textContent='Permission denied';
-        chipEl.textContent='ERR';
-        toast('Please enable Location permission for this app in Android Settings → Apps → this app → Permissions → Location');
-        return;
-      }
-      doGetPosition(type, valEl, chipEl);
-    }).catch(function(){
-      doGetPosition(type, valEl, chipEl);
-    });
-  } else {
-    doGetPosition(type, valEl, chipEl);
-  }
-}
-
-function doGetPosition(type, valEl, chipEl){
+  // Directly call getCurrentPosition — Median.co handles permission via its config
+  // Do NOT use navigator.permissions.query as it breaks in Median WebView
   navigator.geolocation.getCurrentPosition(
-    function(pos){
-      const lat=pos.coords.latitude.toFixed(6), lng=pos.coords.longitude.toFixed(6);
-      const txt=lat+', '+lng;
-      valEl.textContent=txt;
-      chipEl.textContent='GPS';
-      chipEl.style.background='var(--green)';
-      chipEl.style.color='#fff';
-      if(type==='samp') sampGPS=txt; else srcGPS=txt;
+    function(pos) {
+      var lat = pos.coords.latitude.toFixed(6);
+      var lng = pos.coords.longitude.toFixed(6);
+      var txt = lat + ', ' + lng;
+      valEl.textContent = txt;
+      chipEl.textContent = 'GPS';
+      chipEl.style.background = 'var(--green)';
+      chipEl.style.color = '#fff';
+      if (type === 'samp') sampGPS = txt;
+      else srcGPS = txt;
       toast('Location captured ✓');
     },
-    function(err){
-      valEl.textContent='Could not get location';
-      chipEl.textContent='ERR';
-      if(err.code===1){
-        toast('Location permission denied — go to Android Settings → Apps → find this app → Permissions → Allow Location');
-      } else if(err.code===2){
-        toast('GPS signal not found — please go outside or enable Wi-Fi location');
-      } else {
-        toast('Location timeout — try again');
+    function(err) {
+      valEl.textContent = 'Could not get location';
+      chipEl.textContent = 'ERR';
+      chipEl.style.background = 'var(--red)';
+      chipEl.style.color = '#fff';
+      var msg = 'Location error';
+      if (err.code === 1) {
+        msg = 'Permission denied — enable Location in Android Settings → Apps → this app → Permissions';
+      } else if (err.code === 2) {
+        msg = 'GPS signal not found — go outside or enable Wi-Fi location';
+      } else if (err.code === 3) {
+        msg = 'Location timeout — please try again';
       }
+      toast(msg);
     },
-    {enableHighAccuracy:true, timeout:15000, maximumAge:0}
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
   );
 }
+// ---- END GPS FIX ----
 
 function previewPhoto(inp){
   const f=inp.files[0]; if(!f) return;
   const r=new FileReader();
   r.onload=e=>{
     photoData=e.target.result;
-    const now=new Date();
-    photoFilename='';
     const preview=document.getElementById('ph-preview');
     preview.src=photoData; preview.style.display='block';
     document.getElementById('ph-placeholder').style.display='none';
@@ -662,7 +652,7 @@ function renderDashboard(){
   <div class="sec">
     <div class="sec-title">Fit vs unfit</div>
     <div class="donut-wrap">
-      <div style="position:relative;width:100px;height:100px;flex-shrink:0"><canvas id="donut-c" role="img" aria-label="${fit} fit, ${unfit} unfit, ${total-fit-unfit} not tested">${fit} fit, ${unfit} unfit</canvas></div>
+      <div style="position:relative;width:100px;height:100px;flex-shrink:0"><canvas id="donut-c">${fit} fit, ${unfit} unfit</canvas></div>
       <div>
         <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Fit — ${fit} (${pct(fit,fit+unfit)}%)</div>
         <div class="leg-item"><div class="leg-dot" style="background:var(--red)"></div>Unfit — ${unfit} (${pct(unfit,fit+unfit)}%)</div>
@@ -681,7 +671,7 @@ function renderDashboard(){
   </div>
 
   <div class="sec">
-    <div class="sec-title">Parameter averages (avg of all samples)</div>
+    <div class="sec-title">Parameter averages</div>
     ${params.map(p=>{const a=avg(data,p.key);return `
     <div class="ps-row">
       <div class="ps-name">${p.label}</div>
@@ -698,8 +688,7 @@ function renderDashboard(){
       </div>
       <span class="badge ${s.result==='fit'?'b-ok':s.result==='unfit'?'b-bad':'b-neu'}">${s.result||'—'}</span>
     </div>`).join('')}
-  </div>
-  `;
+  </div>`;
 
   if(donutChart){donutChart.destroy();donutChart=null;}
   donutChart=new Chart(document.getElementById('donut-c'),{
